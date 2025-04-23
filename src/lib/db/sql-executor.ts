@@ -34,16 +34,57 @@ export async function executeSQLSafely(
   const timeoutMs = options.timeoutMs || 5000;
   const maxRows = options.maxRows || 1000;
 
-  // Essayer d'extraire la clé "sql" si on reçoit du JSON
-  let cleanSql = sql;
+  console.log('Input SQL (raw):', sql);
+  console.log('Input Type:', typeof sql);
+
+  // Extraire la requête SQL avec des vérifications plus robustes
+  let cleanSql = '';
   try {
-    const maybeJson = JSON.parse(sql);
-    if (maybeJson && typeof maybeJson.sql === 'string') {
-      cleanSql = maybeJson.sql;
+    // Cas 1 : Chaîne JSON
+    if (typeof sql === 'string') {
+      try {
+        const parsedJson = JSON.parse(sql);
+        console.log('Parsed JSON:', parsedJson);
+        
+        // Rechercher la propriété SQL de différentes manières
+        if (typeof parsedJson === 'object') {
+          cleanSql = 
+            parsedJson.sql || 
+            parsedJson.query || 
+            (typeof parsedJson === 'string' ? parsedJson : '');
+        } else if (typeof parsedJson === 'string') {
+          cleanSql = parsedJson;
+        }
+      } catch (jsonError) {
+        // Si ce n'est pas du JSON valide, traiter comme une chaîne directe
+        cleanSql = sql;
+      }
+    } else if (typeof sql === 'object') {
+      // Cas 2 : Objet avec propriété SQL
+      const sqlObj = sql as Record<string, unknown>;
+      cleanSql = 
+        sqlObj.sql as string || 
+        sqlObj.query as string || 
+        (typeof sqlObj === 'string' ? sqlObj : '');
     }
-  } catch (e) {
-    // Ce n’est pas du JSON, pas grave, on continue
+
+    // Dernier recours : convertir en chaîne
+    if (typeof cleanSql !== 'string') {
+      cleanSql = String(cleanSql);
+    }
+  } catch (error) {
+    console.error('Erreur lors de l\'extraction de la requête SQL:', error);
+    throw new Error('Impossible de convertir la requête SQL');
   }
+
+  // Nettoyer et valider la requête SQL
+  console.log('Requête SQL extraite:', cleanSql);
+
+  // Nettoyer la requête 
+  cleanSql = cleanSql
+    .replace(/\s+/g, ' ')   // Remplacer les espaces multiples
+    .replace(/["']\s*,\s*["'].*$/, '') // Supprimer le contenu après une virgule entre guillemets
+    .trim();                // Supprimer les espaces en début/fin
 
   // Vérifier que la requête est sécurisée
   const safetyCheck = validateSQLSafety(cleanSql);
@@ -51,21 +92,13 @@ export async function executeSQLSafely(
     throw new Error(`Requête SQL non sécurisée: ${safetyCheck.reason}`);
   }
 
-  // Nettoyer la requête SQL - supprimer backslashes et sauts de ligne
-  cleanSql = cleanSql
-    .replace(/\\\s*/g, ' ')        // Backslashes + espaces
-    .replace(/\\"/g, '"')          // Guillemets échappés
-    .replace(/\\'/g, "'")          // Apostrophes échappées
-    .replace(/\r\n|\r|\n/g, ' ')   // Sauts de ligne
-    .replace(/\s+/g, ' ')          // Espaces multiples
-    .trim();                       // Espaces en début/fin
-
   // Ajouter une clause LIMIT si elle est absente
   if (!cleanSql.toUpperCase().includes('LIMIT')) {
     cleanSql = `${cleanSql} LIMIT ${maxRows}`;
   }
 
-  console.log('Exécution de la requête SQL nettoyée:', cleanSql);
+  console.log('Requête SQL nettoyée:', cleanSql);
+  console.log('Paramètres:', params);
 
   try {
     const startTime = Date.now();
@@ -85,6 +118,11 @@ export async function executeSQLSafely(
 
     const queryTime = Date.now() - startTime;
 
+    console.log('Résultat de la requête:', {
+      rowCount: result.rowCount,
+      columnsCount: result.fields?.length || 0
+    });
+
     return {
       data: result.rows,
       columns: result.fields?.map(field => field.name) || [],
@@ -93,7 +131,7 @@ export async function executeSQLSafely(
       sql: cleanSql
     };
   } catch (error) {
-    console.error('Erreur lors de l\'exécution SQL:', error);
+    console.error('Erreur complète lors de l\'exécution SQL:', error);
     throw error;
   }
 }

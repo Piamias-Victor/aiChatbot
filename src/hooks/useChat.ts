@@ -58,8 +58,8 @@ export function useChat(): UseChatReturn {
     if (savedPharmacyId) {
       setSelectedPharmacyId(savedPharmacyId);
     } else {
-      // ID de pharmacie par défaut pour les tests - à remplacer par un sélecteur dans l'UI
-      const defaultPharmacyId = "test-pharmacy-id";
+      // Utiliser l'ID de pharmacie réel
+      const defaultPharmacyId = "0764559c-6c21-4d25-a6aa-6f4c411181b1";
       setSelectedPharmacyId(defaultPharmacyId);
       localStorage.setItem('selectedPharmacyId', defaultPharmacyId);
     }

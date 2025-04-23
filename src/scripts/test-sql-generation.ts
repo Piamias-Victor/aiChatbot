@@ -9,7 +9,7 @@ async function testSQLGeneration() {
   // Requête de test
   const testRequest = {
     query: "Quels sont mes 10 produits les plus vendus ce mois-ci ?",
-    pharmacyId: "test-pharmacy-id",
+    pharmacyId: "0764559c-6c21-4d25-a6aa-6f4c411181b1",
     dateRange: {
       startDate: "2023-04-01",
       endDate: "2023-04-30"
