@@ -17,3 +17,19 @@ export interface DateRange {
   startDate: string;
   endDate: string;
 }
+
+// Nouveaux types pour le chat
+export interface ChatMessage {
+  id: string;
+  content: string;
+  isUser: boolean;
+  timestamp: number;
+}
+
+export interface ChatConversation {
+  id: string;
+  messages: ChatMessage[];
+  title?: string;
+  createdAt: number;
+  updatedAt: number;
+}
