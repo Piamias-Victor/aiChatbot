@@ -1,12 +1,24 @@
+// src/components/chat/ChatContainer.tsx
 "use client";
 
-import { FC, useEffect } from 'react';
+import { FC, useEffect, useRef } from 'react';
 import { MessageList } from './MessageList';
 import { ChatInput } from './ChatInput';
 import { useChat } from '@/hooks/useChat';
 
 export const ChatContainer: FC = () => {
   const { messages, isLoading, sendMessage, clearMessages, error } = useChat();
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Fonction pour faire défiler vers le bas après chaque nouveau message
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  // Faire défiler vers le bas quand de nouveaux messages arrivent
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
 
   // Afficher les erreurs dans la console
   useEffect(() => {
@@ -37,7 +49,10 @@ export const ChatContainer: FC = () => {
           )}
         </div>
       </div>
-      <MessageList messages={messages} isLoading={isLoading} />
+      <div className="flex-1 overflow-y-auto">
+        <MessageList messages={messages} isLoading={isLoading} />
+        <div ref={messagesEndRef} />
+      </div>
       <ChatInput onSendMessage={sendMessage} disabled={isLoading} />
     </div>
   );

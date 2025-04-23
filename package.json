@@ -9,7 +9,11 @@
     "lint": "next lint",
     "test-ai": "ts-node --project tsconfig.node.json -r tsconfig-paths/register src/scripts/test-ai-client.ts",
     "test-ai-service": "ts-node --project tsconfig.node.json -r tsconfig-paths/register src/scripts/test-ai-service.ts",
-    "test-chat-api": "ts-node --project tsconfig.node.json -r tsconfig-paths/register src/scripts/test-chat-api.ts"
+    "test-chat-api": "ts-node --project tsconfig.node.json -r tsconfig-paths/register src/scripts/test-chat-api.ts",
+    "test-sql-generation": "ts-node --project tsconfig.node.json -r tsconfig-paths/register src/scripts/test-sql-generation.ts",
+    "test-sql-executor": "ts-node --project tsconfig.node.json -r tsconfig-paths/register src/scripts/test-sql-executor.ts",
+    "test-with-env": "ts-node --project tsconfig.node.json -r tsconfig-paths/register src/scripts/test-with-env.ts",
+    "test-result-analyzer": "ts-node --project tsconfig.node.json -r tsconfig-paths/register src/scripts/test-result-analyzer.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
@@ -18,7 +22,8 @@
     "pg": "^8.15.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-markdown": "^10.1.0"
+    "react-markdown": "^10.1.0",
+    "recharts": "^2.15.3"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
