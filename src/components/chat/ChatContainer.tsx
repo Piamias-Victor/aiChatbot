@@ -1,41 +1,30 @@
 "use client";
 
-import { FC, useState } from 'react';
+import { FC } from 'react';
 import { MessageList } from './MessageList';
 import { ChatInput } from './ChatInput';
-import { MessageProps } from './Message';
+import { useChat } from '@/hooks/useChat';
 
 export const ChatContainer: FC = () => {
-  const [messages, setMessages] = useState<MessageProps[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-
-  const handleSendMessage = (content: string) => {
-    const newUserMessage: MessageProps = {
-      content,
-      isUser: true,
-      timestamp: Date.now(),
-    };
-
-    setMessages(prev => [...prev, newUserMessage]);
-    setIsLoading(true);
-
-    // Simuler une réponse après 1 seconde
-    setTimeout(() => {
-      const botResponse: MessageProps = {
-        content: "Je suis un assistant en cours de développement. Je ne peux pas encore répondre à vos questions.",
-        isUser: false,
-        timestamp: Date.now(),
-      };
-      
-      setMessages(prev => [...prev, botResponse]);
-      setIsLoading(false);
-    }, 1000);
-  };
+  const { messages, isLoading, sendMessage, clearMessages } = useChat();
 
   return (
     <div className="flex flex-col h-full">
-      <MessageList messages={messages} />
-      <ChatInput onSendMessage={handleSendMessage} disabled={isLoading} />
+      <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200">
+        <div className="text-sm text-gray-500">
+          {messages.length > 0 ? `${messages.length} messages` : 'Nouvelle conversation'}
+        </div>
+        {messages.length > 0 && (
+          <button
+            onClick={clearMessages}
+            className="text-xs text-red-500 hover:text-red-700"
+          >
+            Effacer la conversation
+          </button>
+        )}
+      </div>
+      <MessageList messages={messages} isLoading={isLoading} />
+      <ChatInput onSendMessage={sendMessage} disabled={isLoading} />
     </div>
   );
 };
