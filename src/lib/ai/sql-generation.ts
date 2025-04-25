@@ -5,12 +5,24 @@ import { getAICompletion } from './client';
 import { SQL_GENERATION_SYSTEM_PROMPT, generateSQLPrompt } from './prompts';
 import { SQLGenerationRequest, SQLGenerationResponse } from '@/types/ai-sql';
 import { AIMessage } from '@/types/ai-client';
+import { findMatchingTemplate, prepareTemplateResponse } from './sql-templates';
+import { validateAndCorrectSQL } from './sql-validator';
 
 /**
  * Génère une requête SQL à partir d'une question en langage naturel
  */
 export async function generateSQL(request: SQLGenerationRequest): Promise<SQLGenerationResponse> {
   try {
+    // 1. Vérifier d'abord si la question correspond à un template prédéfini
+    const matchingTemplate = findMatchingTemplate(request.query);
+    if (matchingTemplate) {
+      console.log('Template SQL trouvé pour la question:', request.query);
+      return prepareTemplateResponse(matchingTemplate);
+    }
+
+    // 2. Si pas de template correspondant, générer avec l'IA
+    console.log('Aucun template trouvé, génération SQL via IA pour:', request.query);
+    
     // Construire les messages pour l'IA
     const messages: AIMessage[] = [
       // Message système avec le contexte et les instructions
@@ -26,7 +38,7 @@ export async function generateSQL(request: SQLGenerationRequest): Promise<SQLGen
       }
     ];
     
-    // Ajouter l'historique de conversation si disponible
+    // Appel à l'API pour obtenir la réponse de l'IA// Ajouter l'historique de conversation si disponible
     if (request.conversationHistory && request.conversationHistory.length > 0) {
       // Insérer l'historique de conversation entre le message système et la question actuelle
       const historyMessages = request.conversationHistory.map(msg => ({
@@ -48,76 +60,39 @@ export async function generateSQL(request: SQLGenerationRequest): Promise<SQLGen
     const content = completion.content;
     console.log("Réponse brute de l'IA:", content);
     
-    // Solution ultra-robuste - manuellement rechercher et reconstruire la requête SQL
-    
-    // 1. Récupérer la structure complète de la requête SQL
-    const fullText = content.replace(/\\"/g, '"');
-    
-    // Identifier où la requête SQL commence et se termine (à partir de "SELECT" jusqu'à "LIMIT")
-    const selectIndex = fullText.indexOf("SELECT");
+    // Extraire la requête SQL, l'explication et la confiance
     let sqlQuery = '';
+    let explanation = 'Explication non disponible';
+    let confidence = 0.5;
     
-    if (selectIndex >= 0) {
-      // Extraire toute la requête SQL en cherchant les mots-clés typiques
-      // et en reconstruisant une chaîne propre
-      const keywords = [
-        "SELECT", "FROM", "JOIN", "WHERE", "GROUP BY", 
-        "ORDER BY", "LIMIT", "HAVING", "UNION"
-      ];
+    // Essayer de parser le JSON
+    try {
+      // Si la réponse est au format JSON
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
       
-      // Chercher tous les mots-clés dans le texte
-      const parts: {keyword: string, index: number}[] = [];
+      if (jsonMatch) {
+        const jsonData = JSON.parse(jsonMatch[0]);
+        sqlQuery = jsonData.sql || '';
+        explanation = jsonData.explanation || 'Explication non disponible';
+        confidence = jsonData.confidence || 0.5;
+      }
+    } catch (jsonError) {
+      console.warn('Erreur lors du parsing JSON:', jsonError);
       
-      keywords.forEach(keyword => {
-        let pos = fullText.indexOf(keyword, selectIndex);
-        while (pos >= 0) {
-          parts.push({keyword, index: pos});
-          pos = fullText.indexOf(keyword, pos + 1);
-        }
-      });
+      // Si le parsing JSON échoue, essayer d'extraire la requête SQL directement
+      const sqlMatch = content.match(/```sql\s*([\s\S]*?)\s*```|SELECT[\s\S]*?(?:LIMIT \d+|;)/i);
       
-      // Trier les parties par position
-      parts.sort((a, b) => a.index - b.index);
-      
-      // Extraire les clauses et reconstruire la requête
-      if (parts.length > 0) {
-        for (let i = 0; i < parts.length; i++) {
-          const current = parts[i];
-          const next = i < parts.length - 1 ? parts[i + 1] : null;
-          
-          const start = current.index;
-          const end = next ? next.index : fullText.length;
-          
-          // Extraire cette partie de la requête
-          let part = fullText.substring(start, end).trim();
-          // Supprimer les caractères d'échappement et formater
-          part = part.replace(/\\\s*/g, ' ').trim();
-          
-          // Ajouter à la requête reconstruite
-          sqlQuery += part + ' ';
-        }
-      } else {
-        // Fallback - essayer de trouver une requête SQL basique
-        const simpleMatch = fullText.match(/SELECT[\s\S]*?(?:LIMIT \d+|;)/i);
-        if (simpleMatch) {
-          sqlQuery = simpleMatch[0].replace(/\\\s*/g, ' ').trim();
+      if (sqlMatch) {
+        sqlQuery = sqlMatch[1] || sqlMatch[0];
+        sqlQuery = sqlQuery.replace(/```sql|```/g, '').trim();
+        
+        // Essayer de trouver une explication
+        const explanationMatch = content.match(/explication:?\s*([\s\S]*?)(?=\n\n|\n```|$)/i);
+        if (explanationMatch) {
+          explanation = explanationMatch[1].trim();
         }
       }
     }
-    
-    // 2. Récupérer l'explication
-    let explanation = 'Explication non disponible';
-    const explanationMatch = fullText.match(/"explanation":\s*"([^"]+)"/);
-    if (explanationMatch && explanationMatch[1]) {
-      explanation = explanationMatch[1]
-        .replace(/\\n/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-    }
-    
-    // 3. Récupérer le niveau de confiance
-    const confidenceMatch = content.match(/confidence"?:\s*([\d.]+)/);
-    const confidence = confidenceMatch ? parseFloat(confidenceMatch[1]) : 0.5;
     
     // Si la requête SQL est vide ou invalide, considérer que c'est un échec
     if (!sqlQuery || !sqlQuery.toUpperCase().includes("SELECT")) {
@@ -144,9 +119,15 @@ export async function generateSQL(request: SQLGenerationRequest): Promise<SQLGen
       };
     }
     
-    // Retourner les résultats extraits
+    // 3. Valider et corriger la requête SQL
+    console.log('Validation et correction de la requête SQL générée');
+    const correctedSql = await validateAndCorrectSQL(sqlQuery, request.pharmacyId);
+    
+    console.log('Requête SQL finale:', correctedSql);
+    
+    // Retourner les résultats
     return {
-      sql: sqlQuery.trim(),
+      sql: correctedSql.trim(),
       explanation,
       confidence
     };
@@ -184,7 +165,6 @@ export function validateSQLSafety(sql: string): { safe: boolean; reason?: string
   }
   
   // Vérifier la présence de la clause WHERE pour les pharmacies
-  // Cette vérification est simple et pourrait être améliorée
   if (sql.toUpperCase().includes('FROM DATA_') && 
       !sql.toUpperCase().includes('WHERE') && 
       !sql.toUpperCase().includes('PHARMACY_ID')) {
@@ -195,4 +175,4 @@ export function validateSQLSafety(sql: string): { safe: boolean; reason?: string
   }
   
   return { safe: true };
-}
+}    

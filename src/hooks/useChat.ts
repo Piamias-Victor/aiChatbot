@@ -23,6 +23,7 @@ interface UseChatReturn {
   sendMessage: (content: string) => Promise<void>;
   clearMessages: () => void;
   error: string | null;
+  reportSQLError: (messageId: string, sqlQuery: string) => Promise<void>;
 }
 
 export function useChat(): UseChatReturn {
@@ -85,11 +86,51 @@ export function useChat(): UseChatReturn {
     const analyticalKeywords = [
       'vente', 'stock', 'marge', 'produit', 'ca ', 'chiffre', 'affaire',
       'analyse', 'tendance', 'statistique', 'comparer', 'evolution',
-      'meilleur', 'pire', 'rentable', 'pharmacie', 'catégorie', 'laboratoire'
+      'meilleur', 'pire', 'rentable', 'pharmacie', 'catégorie', 'laboratoire',
+      'rupture', 'rotation', 'commande', 'inventaire'
     ];
     
     const lowerQuestion = question.toLowerCase();
     return analyticalKeywords.some(keyword => lowerQuestion.includes(keyword));
+  };
+
+  // Signaler une erreur SQL pour amélioration future
+  const reportSQLError = async (messageId: string, sqlQuery: string) => {
+    // Trouver le message correspondant
+    const messageIndex = messages.findIndex(msg => msg.id === messageId);
+    if (messageIndex === -1) return;
+    
+    const userMessage = messages[messageIndex - 1];
+    
+    try {
+      // Envoyer le rapport d'erreur à l'API
+      const response = await fetch('/api/feedback/sql-error', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messageId,
+          userQuery: userMessage?.content,
+          sqlQuery,
+          timestamp: Date.now()
+        }),
+      });
+      
+      if (response.ok) {
+        // Ajouter un message système confirmant le signalement
+        const feedbackMessage: EnhancedChatMessage = {
+          id: generateId(),
+          content: "Merci pour votre signalement. Cette erreur SQL a été enregistrée pour amélioration.",
+          isUser: false,
+          timestamp: Date.now(),
+        };
+        
+        setMessages(prev => [...prev, feedbackMessage]);
+      }
+    } catch (err) {
+      console.error('Erreur lors du signalement:', err);
+    }
   };
 
   const sendMessage = useCallback(async (content: string) => {
@@ -134,17 +175,21 @@ export function useChat(): UseChatReturn {
           }),
         });
         
+        const data = await response.json();
+        
         if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(`Erreur API Analyse: ${errorData.error?.message || 'Erreur inconnue'}`);
+          throw new Error(`Erreur API Analyse: ${data.message || 'Erreur inconnue'}`);
         }
         
-        const data = await response.json();
+        // Vérifier si c'est un succès partiel (fallback)
+        const isPartialSuccess = data.status === 'partial_success';
         
         // Créer un message assistante avec les données d'analyse
         const assistantMessage: EnhancedChatMessage = {
           id: generateId(),
-          content: data.data.analysis || "Voici les résultats de votre requête.",
+          content: isPartialSuccess 
+            ? `${data.message}\n\n${data.data.analysis}` 
+            : data.data.analysis || "Voici les résultats de votre requête.",
           isUser: false,
           timestamp: Date.now(),
           analysis: {
@@ -157,6 +202,11 @@ export function useChat(): UseChatReturn {
         };
         
         setMessages(prev => [...prev, assistantMessage]);
+        
+        // Si c'est un succès partiel, ajouter une indication d'erreur
+        if (isPartialSuccess) {
+          setError(`Erreur dans la requête SQL d'origine: ${data.error}`);
+        }
       } else {
         // Utiliser l'API de chat standard pour les questions conversationnelles
         const response = await fetch('/api/chat', {
@@ -230,6 +280,7 @@ export function useChat(): UseChatReturn {
     isLoading,
     sendMessage,
     clearMessages,
-    error
+    error,
+    reportSQLError
   };
 }

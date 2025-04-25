@@ -7,7 +7,7 @@ import { ChatInput } from './ChatInput';
 import { useChat } from '@/hooks/useChat';
 
 export const ChatContainer: FC = () => {
-  const { messages, isLoading, sendMessage, clearMessages, error } = useChat();
+  const { messages, isLoading, sendMessage, clearMessages, error, reportSQLError } = useChat();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Fonction pour faire défiler vers le bas après chaque nouveau message
@@ -36,7 +36,7 @@ export const ChatContainer: FC = () => {
         <div className="flex items-center">
           {error && (
             <span className="text-xs text-red-500 mr-4">
-              Erreur de connexion
+              {error}
             </span>
           )}
           {messages.length > 0 && (
@@ -50,7 +50,14 @@ export const ChatContainer: FC = () => {
         </div>
       </div>
       <div className="flex-1 overflow-y-auto">
-        <MessageList messages={messages} isLoading={isLoading} />
+        <MessageList 
+          messages={messages.map(msg => ({
+            ...msg,
+            messageId: msg.id,
+            onReportSQLError: reportSQLError
+          }))} 
+          isLoading={isLoading} 
+        />
         <div ref={messagesEndRef} />
       </div>
       <ChatInput onSendMessage={sendMessage} disabled={isLoading} />

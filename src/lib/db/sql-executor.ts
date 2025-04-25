@@ -80,11 +80,11 @@ export async function executeSQLSafely(
   // Nettoyer et valider la requête SQL
   console.log('Requête SQL extraite:', cleanSql);
 
-  // Nettoyer la requête 
+  // Nettoyer la requête de manière sécurisée en préservant les guillemets
+  // Fonction de nettoyage améliorée pour gérer correctement les guillemets
   cleanSql = cleanSql
-    .replace(/\s+/g, ' ')   // Remplacer les espaces multiples
-    .replace(/["']\s*,\s*["'].*$/, '') // Supprimer le contenu après une virgule entre guillemets
-    .trim();                // Supprimer les espaces en début/fin
+    .replace(/\s+/g, ' ')  // Remplacer espaces multiples par un seul espace
+    .trim();               // Supprimer espaces début/fin
 
   // Vérifier que la requête est sécurisée
   const safetyCheck = validateSQLSafety(cleanSql);

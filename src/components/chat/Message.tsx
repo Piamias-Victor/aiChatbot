@@ -1,5 +1,5 @@
 // src/components/chat/Message.tsx
-import { FC } from 'react';
+import { FC, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { DataVisualizer } from '../analytics/visualization/DataVisualizer';
 
@@ -7,6 +7,7 @@ export interface MessageProps {
   content: string;
   isUser: boolean;
   timestamp?: number;
+  messageId?: string;
   analysis?: {
     sql?: string;
     explanation?: string;
@@ -14,13 +15,41 @@ export interface MessageProps {
     visualizationType?: string;
     visualizationData?: any;
   };
+  onReportSQLError?: (messageId: string, sql: string) => Promise<void>;
 }
 
-export const Message: FC<MessageProps> = ({ content, isUser, timestamp, analysis }) => {
+export const Message: FC<MessageProps> = ({ 
+  content, 
+  isUser, 
+  timestamp, 
+  messageId,
+  analysis,
+  onReportSQLError 
+}) => {
+  const [sqlDetailsOpen, setSqlDetailsOpen] = useState(false);
+  const [isReporting, setIsReporting] = useState(false);
+  const [reportSent, setReportSent] = useState(false);
+  
   const formattedTime = timestamp ? new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
 
   // Détermine si le message contient une analyse
   const hasAnalysis = !!analysis && (!!analysis.visualizationType || !!analysis.sql);
+
+  // Fonction pour signaler une erreur SQL
+  const handleReportSQLError = async () => {
+    if (!messageId || !analysis?.sql || !onReportSQLError) return;
+    
+    setIsReporting(true);
+    
+    try {
+      await onReportSQLError(messageId, analysis.sql);
+      setReportSent(true);
+    } catch (error) {
+      console.error('Erreur lors du signalement:', error);
+    } finally {
+      setIsReporting(false);
+    }
+  };
 
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}>
@@ -49,13 +78,39 @@ export const Message: FC<MessageProps> = ({ content, isUser, timestamp, analysis
                 
                 {/* SQL utilisé (optionnel, dépliable) */}
                 {analysis.sql && (
-                  <details className="mt-2 text-xs">
-                    <summary className="cursor-pointer text-blue-600 hover:text-blue-800">
-                      Voir la requête SQL
+                  <details 
+                    className="mt-2 text-xs"
+                    open={sqlDetailsOpen}
+                    onToggle={() => setSqlDetailsOpen(!sqlDetailsOpen)}
+                  >
+                    <summary className="cursor-pointer text-blue-600 hover:text-blue-800 flex items-center justify-between">
+                      <span>Voir la requête SQL</span>
+                      {onReportSQLError && !reportSent && (
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            handleReportSQLError();
+                          }}
+                          disabled={isReporting}
+                          className="text-xs text-red-500 hover:text-red-700 ml-2"
+                        >
+                          {isReporting ? 'Signalement...' : 'Signaler une erreur SQL'}
+                        </button>
+                      )}
+                      {reportSent && (
+                        <span className="text-xs text-green-600 ml-2">
+                          Signalement envoyé
+                        </span>
+                      )}
                     </summary>
                     <div className="mt-1 p-2 bg-gray-100 rounded overflow-x-auto">
                       <pre>{analysis.sql}</pre>
                     </div>
+                    {analysis.explanation && (
+                      <div className="mt-2 p-2 bg-gray-50 rounded text-xs text-gray-600">
+                        <strong>Explication:</strong> {analysis.explanation}
+                      </div>
+                    )}
                   </details>
                 )}
               </div>

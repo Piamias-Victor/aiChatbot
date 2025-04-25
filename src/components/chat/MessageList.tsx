@@ -1,3 +1,4 @@
+// src/components/chat/MessageList.tsx
 import { FC } from 'react';
 import { Message, MessageProps } from './Message';
 
@@ -25,6 +26,9 @@ export const MessageList: FC<MessageListProps> = ({ messages, isLoading = false 
               content={message.content}
               isUser={message.isUser}
               timestamp={message.timestamp}
+              messageId={message.messageId}
+              analysis={message.analysis}
+              onReportSQLError={message.onReportSQLError}
             />
           ))}
           
